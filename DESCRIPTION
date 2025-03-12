@@ -1,0 +1,31 @@
+Package: brmsTutorial
+Title: LearnR Tutorial on Bayesian Regression with brms
+Version: 0.1.0
+Authors@R: 
+    person("David Munoz Tord", "Author", email = "david.munoztord@mailbox.org", role = c("aut", "cre"))
+Description: An interactive tutorial to learn Bayesian regression modeling using the brms package.
+    This tutorial covers the basics of Bayesian statistics, model specification, fitting models,
+    interpreting results, and making predictions with brms.
+License: MIT + file LICENSE
+Encoding: UTF-8
+LazyData: true
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.2
+Depends:
+    R (>= 3.6.0)
+Imports:
+    learnr,
+    brms (>= 2.16.0),
+    ggplot2,
+    dplyr,
+    tidyr,
+    bayesplot,
+    shiny,
+    rstan,
+    rstanarm,
+    posterior,
+    palmerpenguins
+Suggests:
+    knitr,
+    rmarkdown,
+    testthat 

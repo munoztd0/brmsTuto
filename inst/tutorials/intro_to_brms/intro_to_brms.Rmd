@@ -1,0 +1,468 @@
+---
+title: "Introduction to Bayesian Regression with brms"
+output: 
+  learnr::tutorial:
+    progressive: true
+    allow_skip: true
+runtime: shiny_prerendered
+description: "Learn how to perform Bayesian regression modeling using the brms package in R"
+---
+
+```{r setup, include=FALSE}
+library(learnr)
+library(brms)
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(bayesplot)
+library(posterior)
+library(palmerpenguins)
+library(brmsTutorial)  # Load this tutorial package
+
+# Set knitr options
+knitr::opts_chunk$set(
+  echo = TRUE,
+  message = FALSE,
+  warning = FALSE,
+  comment = "#>",
+  fig.width = 7,
+  fig.height = 5
+)
+
+# Load sample datasets directly from palmerpenguins
+data("penguins")
+# Clean the data (remove NA values)
+penguins_clean <- na.omit(penguins)
+
+# Pre-fit some models for faster running
+# We do this ahead so the user doesn't need to wait for models to compile
+if (!file.exists("prefit_model1.rds")) {
+  # Simple linear regression model
+  prefit_model1 <- brm(body_mass_g ~ flipper_length_mm, data = penguins_clean, 
+                      family = gaussian(), 
+                      file = "prefit_model1",
+                      seed = 123)
+  saveRDS(prefit_model1, "prefit_model1.rds")
+} else {
+  prefit_model1 <- readRDS("prefit_model1.rds")
+}
+
+if (!file.exists("prefit_model2.rds")) {
+  # Multiple regression model
+  prefit_model2 <- brm(body_mass_g ~ flipper_length_mm + bill_length_mm, 
+                      data = penguins_clean, 
+                      family = gaussian(), 
+                      file = "prefit_model2",
+                      seed = 456)
+  saveRDS(prefit_model2, "prefit_model2.rds")
+} else {
+  prefit_model2 <- readRDS("prefit_model2.rds")
+}
+```
+
+## Welcome to Bayesian Regression with brms!
+
+This tutorial will introduce you to Bayesian regression modeling using the brms package in R. By the end of this tutorial, you'll be able to:
+
+1. Understand the basic concepts of Bayesian statistics
+2. Specify and fit Bayesian regression models using brms
+3. Interpret the results of your models
+4. Check model diagnostics and assess model fit
+5. Make predictions with your models
+6. Compare different models
+
+Let's get started with the basics!
+
+## What is Bayesian Statistics?
+
+### The Basics of Bayesian Thinking
+
+Bayesian statistics is an approach to data analysis that combines prior knowledge or beliefs with observed data to update our understanding about parameters of interest.
+
+The core of Bayesian statistics is Bayes' theorem:
+
+$$P(\theta|D) = \frac{P(D|\theta) \times P(\theta)}{P(D)}$$
+
+Where:
+- $P(\theta|D)$ is the **posterior** probability of parameters $\theta$ given the data $D$
+- $P(D|\theta)$ is the **likelihood** of observing data $D$ given parameters $\theta$
+- $P(\theta)$ is the **prior** probability of parameters $\theta$
+- $P(D)$ is the probability of the data (often called the marginal likelihood or evidence)
+
+```{r bayesian-concept, echo=FALSE}
+question("Which of the following statements about Bayesian statistics is TRUE?",
+  answer("Bayesian methods always give the same results as frequentist methods."),
+  answer("Bayesian statistics doesn't use prior information."),
+  answer("Bayesian statistics combines prior information with observed data to form a posterior distribution.", correct = TRUE),
+  answer("Bayesian statistics always requires uninformative priors."),
+  allow_retry = TRUE
+)
+```
+
+### Why Use Bayesian Methods?
+
+Bayesian statistics offers several advantages:
+
+1. **Incorporation of prior knowledge**: You can include what you already know about parameters through prior distributions.
+2. **Full probability distributions**: Rather than just point estimates, you get complete posterior distributions.
+3. **Intuitive interpretation**: Probability statements about parameters are direct and intuitive.
+4. **Flexible modeling**: Complex models can be built up from simpler components.
+5. **Handling of uncertainty**: All sources of uncertainty are properly quantified.
+
+## Introduction to brms
+
+The brms package (Bayesian Regression Models using Stan) provides an accessible interface to build a wide range of Bayesian models in R using Stan as the backend. 
+
+### What is brms?
+
+brms was developed by Paul Bürkner to make Bayesian modeling accessible to R users already familiar with modeling functions like `lm()` or `glm()`. It provides a formula interface similar to these functions while handling the complex Stan coding in the background.
+
+Let's look at a simple example of the formula syntax:
+
+```{r brms-formula, eval=FALSE}
+# A simple linear regression in brms
+model <- brm(y ~ x1 + x2, data = my_data, family = gaussian())
+```
+
+### Installing and Loading brms
+
+To use brms, you need to have both the package itself and Stan installed.
+
+```{r install-brms, eval=FALSE}
+# Install packages if not already installed
+if (!requireNamespace("brms", quietly = TRUE)) {
+  install.packages("brms")
+}
+
+# Load brms
+library(brms)
+```
+
+## Your First Bayesian Model with brms
+
+Let's fit a simple linear regression model to predict penguin body mass from flipper length using the Palmer Penguins dataset.
+
+### Exploring the Data
+
+First, let's look at the data:
+
+```{r explore-data}
+# Look at the first few rows of the dataset
+head(penguins_clean)
+
+# Plot the relationship between flipper length and body mass
+ggplot(penguins_clean, aes(x = flipper_length_mm, y = body_mass_g)) +
+  geom_point(aes(color = species), alpha = 0.7) +
+  geom_smooth(method = "lm", se = FALSE, color = "blue") +
+  labs(x = "Flipper Length (mm)", y = "Body Mass (g)",
+       title = "Relationship between Flipper Length and Body Mass in Penguins")
+```
+
+### Fitting a Simple Linear Regression Model
+
+Now, let's fit a Bayesian linear regression model using brms:
+
+```{r first-model-illustration, eval=FALSE}
+# Define and fit the model
+# In a real session, this would take some time to run
+model1 <- brm(
+  body_mass_g ~ flipper_length_mm,  # Formula: body mass predicted by flipper length
+  data = penguins_clean,            # Dataset
+  family = gaussian(),              # Likelihood function (normal distribution)
+  chains = 4,                       # Number of Markov chains
+  iter = 2000,                      # Number of iterations per chain
+  warmup = 1000,                    # Number of warmup iterations per chain
+  seed = 123                        # For reproducibility
+)
+```
+
+For this tutorial, we've pre-fit this model to save time. Let's explore it:
+
+```{r explore-model1}
+# Summary of the model
+summary(prefit_model1)
+
+# Plot the model coefficients
+plot(prefit_model1)
+```
+
+### Interpreting the Results
+
+The model output gives us:
+
+1. **Population-Level Effects**: These are similar to fixed effects in frequentist models. They show the relationship between predictors and the outcome.
+2. **Family-Specific Parameters**: Parameters specific to the chosen distribution family (e.g., sigma for Gaussian models).
+3. **Samples**: Information about the MCMC sampling process.
+4. **MCMC diagnostics**: Measures like Rhat and ESS to assess sampling quality.
+
+```{r interpret-question, echo=FALSE}
+question("Based on the model summary, which of the following is TRUE?",
+  answer("There is a negative relationship between flipper length and body mass."),
+  answer("There is a positive relationship between flipper length and body mass.", correct = TRUE),
+  answer("There is no clear relationship between flipper length and body mass."),
+  answer("The model failed to converge properly."),
+  allow_retry = TRUE
+)
+```
+
+## Working with Priors
+
+One of the key aspects of Bayesian modeling is specifying prior distributions for your parameters.
+
+### Understanding Priors
+
+Priors represent your beliefs about parameter values before seeing the data. They can be:
+
+- **Informative**: Strong beliefs about parameter values
+- **Weakly informative**: General constraints on reasonable values
+- **Uninformative/flat**: Minimal information about parameters
+
+### Checking Default Priors
+
+brms sets default priors for you, but it's good practice to check what they are:
+
+```{r default-priors}
+# Check what priors are being used by default
+get_prior(body_mass_g ~ flipper_length_mm, data = penguins_clean, family = gaussian())
+```
+
+### Setting Custom Priors
+
+You can specify your own priors when fitting a model:
+
+```{r custom-priors, eval=FALSE}
+# Set custom priors
+my_priors <- c(
+  prior(normal(0, 5000), class = "Intercept"),
+  prior(normal(0, 100), class = "b"),
+  prior(cauchy(0, 500), class = "sigma")
+)
+
+# Fit model with custom priors
+model_with_priors <- brm(
+  body_mass_g ~ flipper_length_mm,
+  data = penguins_clean,
+  family = gaussian(),
+  prior = my_priors,
+  chains = 4,
+  iter = 2000,
+  seed = 123
+)
+```
+
+## Multiple Predictors
+
+Let's extend our model to include more than one predictor.
+
+### Fitting a Multiple Regression Model
+
+We'll add bill length to our model:
+
+```{r multiple-regression, eval=FALSE}
+# Multiple regression model
+model2 <- brm(
+  body_mass_g ~ flipper_length_mm + bill_length_mm,
+  data = penguins_clean,
+  family = gaussian(),
+  chains = 4,
+  iter = 2000,
+  seed = 456
+)
+```
+
+Again, we've pre-fit this model:
+
+```{r explore-model2}
+# Summary of the multiple regression model
+summary(prefit_model2)
+```
+
+### Exercise: Interpret the Multiple Regression
+
+```{r multiple-regression-interpret, echo=FALSE}
+quiz(
+  question("Based on the multiple regression model, which statement is TRUE?",
+    answer("Both flipper length and bill length have positive associations with body mass.", correct = TRUE),
+    answer("Flipper length has a positive association, but bill length has a negative association."),
+    answer("Both flipper length and bill length have negative associations with body mass."),
+    answer("Flipper length has a negative association, but bill length has a positive association.")
+  ),
+  
+  question("In this model, which variable appears to have a stronger relationship with body mass?",
+    answer("Flipper length (flipper_length_mm)", correct = TRUE),
+    answer("Bill length (bill_length_mm)"),
+    answer("Both have approximately equal relationships."),
+    answer("Neither has a clear relationship.")
+  )
+)
+```
+
+## Posterior Predictive Checks
+
+A key advantage of Bayesian models is the ability to easily generate predictions that account for parameter uncertainty.
+
+### Checking Model Fit
+
+We can use posterior predictive checks to assess how well our model captures the data:
+
+```{r pp-check}
+# Posterior predictive check for model1
+pp_check(prefit_model1, ndraws = 50)
+```
+
+The black line shows the actual data distribution, while the blue lines show distributions of data simulated from the model. If the model fits well, the simulated data should look similar to the real data.
+
+### Making Predictions
+
+We can generate predictions for new data points:
+
+```{r predictions}
+# Create new data for prediction
+new_data <- data.frame(flipper_length_mm = c(180, 200, 220))
+
+# Make predictions
+predictions <- predict(prefit_model1, newdata = new_data)
+cbind(new_data, predictions)
+```
+
+## Model Comparison
+
+Now that we have two models, we can compare them to see which one is better.
+
+### Using Information Criteria
+
+We can use leave-one-out cross-validation (LOO) for model comparison:
+
+```{r model-comparison}
+# Compare the two models
+model1_loo <- loo(prefit_model1)
+model2_loo <- loo(prefit_model2)
+loo_compare(model1_loo, model2_loo)
+```
+
+A negative value in the 'elpd_diff' column indicates that the second model (with both predictors) is better.
+
+## Advanced Topics in brms
+
+brms can do much more than basic linear regression. Here's a quick overview of some advanced features:
+
+### Different Response Distributions
+
+brms supports many different response distributions:
+
+```{r distributions, eval=FALSE}
+# Logistic regression for binary outcomes (predicting sex)
+penguins_sex <- penguins %>% 
+  filter(!is.na(sex)) %>%
+  mutate(sex = factor(sex, levels = c("female", "male")))
+
+logistic_model <- brm(
+  sex ~ bill_depth_mm + bill_length_mm, 
+  data = penguins_sex, 
+  family = bernoulli("logit")
+)
+
+# Poisson regression for count data
+# (Imagine we had a count of eggs laid by each penguin)
+set.seed(123)
+penguins_count <- penguins_clean %>%
+  mutate(eggs = rpois(n(), lambda = 2))  # Simulated count data
+
+poisson_model <- brm(
+  eggs ~ species, 
+  data = penguins_count, 
+  family = poisson()
+)
+```
+
+### Multilevel Models
+
+You can fit multilevel (hierarchical) models:
+
+```{r multilevel, eval=FALSE}
+# Random intercepts model for different penguin species
+multilevel_model <- brm(
+  body_mass_g ~ flipper_length_mm + (1|species), 
+  data = penguins_clean
+)
+```
+
+### Non-linear Models
+
+You can also specify non-linear relationships:
+
+```{r nonlinear, eval=FALSE}
+# Non-linear model
+nonlinear_model <- brm(
+  bf(body_mass_g ~ a * exp(b * flipper_length_mm)),
+  data = penguins_clean,
+  nl = TRUE,
+  prior = c(
+    prior(normal(1000, 500), nlpar = "a"),
+    prior(normal(0.01, 0.005), nlpar = "b")
+  )
+)
+```
+
+## Conclusion
+
+In this tutorial, you've learned:
+
+1. The basics of Bayesian statistics
+2. How to fit models using brms
+3. How to interpret model results
+4. How to check model fit
+5. How to make predictions
+6. How to compare models
+
+This is just the beginning! brms is capable of fitting many other types of models, including multilevel models, multivariate models, and models with non-linear relationships.
+
+### Further Resources
+
+To learn more about brms and Bayesian statistics:
+
+- [brms package documentation](https://paul-buerkner.github.io/brms/)
+- [Statistical Rethinking by Richard McElreath](https://xcelab.net/rm/statistical-rethinking/)
+- [Bayesian Data Analysis by Gelman et al.](http://www.stat.columbia.edu/~gelman/book/)
+- [palmerpenguins documentation](https://allisonhorst.github.io/palmerpenguins/)
+
+## Final Quiz
+
+```{r final-quiz, echo=FALSE}
+quiz(
+  question("Which of the following is NOT a key component of Bayesian statistics?",
+    answer("Prior distribution"),
+    answer("Likelihood function"),
+    answer("Posterior distribution"),
+    answer("P-value", correct = TRUE)
+  ),
+  
+  question("What does brms stand for?",
+    answer("Bayesian Regression Models with Stan", correct = TRUE),
+    answer("Bayesian R Modeling System"),
+    answer("Basic Regression Modeling Software"),
+    answer("Bayesian Regression Model Selection")
+  ),
+  
+  question("Which of these is a valid way to specify a prior for the intercept in brms?",
+    answer("intercept = normal(0, 10)"),
+    answer("prior(normal(0, 10), class = 'Intercept')", correct = TRUE),
+    answer("set_prior('Intercept ~ normal(0, 10)')"),
+    answer("brm(priors = list(Intercept = normal(0, 10)))")
+  ),
+  
+  question("What does the 'Rhat' diagnostic in brms output measure?",
+    answer("Model fit to the data"),
+    answer("Convergence of the MCMC chains", correct = TRUE),
+    answer("Effective sample size"),
+    answer("Predictive accuracy")
+  ),
+  
+  question("In the Palmer Penguins dataset, which species tends to have the largest body mass?",
+    answer("Adelie"),
+    answer("Chinstrap"),
+    answer("Gentoo", correct = TRUE),
+    answer("Emperor")
+  )
+)
+``` 
